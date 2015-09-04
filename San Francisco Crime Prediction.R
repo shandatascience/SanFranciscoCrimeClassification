@@ -13,6 +13,8 @@
 library(dplyr)
 library(ggplot2)
 library(caret)
+## Used for manipulating times and dates
+library(lubridate)
 library(RevoUtilsMath)
 
 # Load data ---------------------------------------------------------------
@@ -31,10 +33,10 @@ test <- read.csv("test.csv", header = TRUE, sep = ",")
 
 # Clean data --------------------------------------------------------------
 
-## Dates needs to be converted from a Factor variable to POSIXlt format
-train$Dates <- as.character(train$Dates)
-train$Dates <- strptime(train$Dates, "%Y-%m-%d %H:%M:%S")
-
+## Dates needs to be converted from a Factor variable to POSIXct format
+## Using lubridate
+train$Dates <- ymd_hms(train$Dates)
+train$Dates <- as.POSIXct(round(train$Dates, units = "days"))
 
 ## Descriptions and Addresses are not Factors, so convert to Character
 train$Descript <- as.character(train$Descript)
@@ -68,26 +70,50 @@ rm(inTrain)
 ## but they may be used to explore the training data set.
 
 
-str(train)
+str(training)
 
-summary(train)
+summary(training)
 
-unique(train$Category)
+table(training$DayOfWeek)
+plot(training$DayOfWeek)
 
-unique(train$PdDistrict)
+plot(training$Category)
 
-unique(train$Resolution)
+## Do different districts have different crime profiles?
+## Plot the Crimes against District
+plot(table(training$PdDistrict, training$Category))
+# This shows that in different districts, the proportion of different crimes will vary
+table(training$Category, training$PdDistrict)
 
-table(train$DayOfWeek)
-plot(train$DayOfWeek)
+## Are there different crimes on different days
+## What are the top crimes on Mondays?
+monday <- filter(training, DayOfWeek == "Monday")
+df <- as.data.frame(table(monday$Category))
+arrange(df, desc(Freq))
 
-plot(train$Category)
+## Function to find the top 10 crime categories by day
+crimeByDay <- function(df, day) {
+    day <- filter(training, DayOfWeek == day)
+    table <- as.data.frame(table(day$Category))
+    head(arrange(table, desc(Freq)))
+}
 
-# What are the top crimes on Mondays?
-table(train$Category[, train$DayOfWeek == "Monday"] )
-temp <- filter(train, DayOfWeek == "Monday")
+## Do different crimes occur at different times during a day?
 
-# Are there multiple crimes are addresses?
+
+## What are Bad Checks?
+bc <- filter(training[, -1], Category == "BAD CHECKS")
+as.data.frame(table(bc$Descript))
+## Cheques... Not everyone is American!
+
+## Types of ASSAULT?
+assault <- filter(training[, -1], Category == "ASSAULT")
+as.data.frame(table(assault$Descript))
+
+
+
+
+## Are there multiple crimes are addresses?
 dim(training)[1]
 length(unique(training$Address))
 dim(training)[1] / length(unique(training$Address))
