@@ -5,9 +5,12 @@
 
 ## We are encouraged to explore the data visually, such as on a map
 
-## Init
+
+# Init --------------------------------------------------------------------
+
 library(dplyr)
 library(ggplot2)
+library(caret)
 
 # Load data ---------------------------------------------------------------
 
@@ -35,6 +38,19 @@ train$Descript <- as.character(train$Descript)
 train$Address <- as.character(train$Address)
 
 
+# Cross Validation --------------------------------------------------------
+
+## Split the train set into subsets for cross validation of prediction model
+inTrain <- createDataPartition(y = train$Category, p = 0.6, list = FALSE)
+
+## The training set is primarily used for training a prediction model
+## The training set is also easier for exploring, and quicker to test models
+training <- train[inTrain, ]
+
+## The testing set will be used for estimating the out-of-sample error, which
+## will be quicker to do than submitting endless amounts of files to Kaggle!
+testing <- train[-inTrain, ]
+
 # Explore the data --------------------------------------------------------
 
 str(train)
@@ -58,4 +74,32 @@ temp <- filter(train, DayOfWeek == "Monday")
 
 # Feature engineering -----------------------------------------------------
 
+## The Address field gives clue as to whether a crime occurred on a street
+## corner, based on the existence of "/".
+## Function to identify whether address is a corner or not
+corner <- function(x) {
+    if (grepl("/", x) == TRUE)
+        return("Corner")
+    else
+        return("Building")
+}
+
+training$Corner <- sapply(training$Address, corner)
+
 ## Crimes can be categorised
+
+
+# Modelling ---------------------------------------------------------------
+
+set.seed(13579)
+modelFit <- train(Category ~ DayOfWeek + PdDistrict + Resolution + Corner, method = "rf", data = training)
+
+
+
+# Cross-validation --------------------------------------------------------
+
+## Run the same data preprocessing performed on the training data set on the
+## testing data set.
+
+testing$Corner <- sapply(training$Address, corner)
+
