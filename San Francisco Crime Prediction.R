@@ -182,6 +182,7 @@ system.time(
 system.time(
   modelFit <- train(Category ~ DayOfWeek + Corner + PdDistrict + Hour + Month + Year, method = "rpart", data = training)
 )
+## Accuracy is only 0.2247149
 
 ## Prediction model using random forests (rf)
 ## This takes a very long time, and requires a lot of RAM, depending
@@ -193,6 +194,7 @@ system.time(
 system.time(
     modelFit <- train(Category ~ DayOfWeek + PdDistrict + Corner + Hour + Month + Year, method = "parRF", ntree = 5, data = training)
 )
+## Accuracy is only marginally better: 0.2229739
 
 # Cross-validation --------------------------------------------------------
 
