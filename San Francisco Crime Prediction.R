@@ -5,12 +5,15 @@
 
 ## We are encouraged to explore the data visually, such as on a map
 
+## R version 3.2.1 (2015-06-18)
+## Platform: x86_64-w64-mingw32/x64 (64-bit)
 
 # Init --------------------------------------------------------------------
 
 library(dplyr)
 library(ggplot2)
 library(caret)
+library(RevoUtilsMath)
 
 # Load data ---------------------------------------------------------------
 
@@ -37,8 +40,9 @@ train$Dates <- strptime(train$Dates, "%Y-%m-%d %H:%M:%S")
 train$Descript <- as.character(train$Descript)
 train$Address <- as.character(train$Address)
 
-
 # Cross Validation --------------------------------------------------------
+
+set.seed(2468)
 
 ## Split the train set into subsets for cross validation of prediction model
 inTrain <- createDataPartition(y = train$Category, p = 0.6, list = FALSE)
@@ -51,7 +55,18 @@ training <- train[inTrain, ]
 ## will be quicker to do than submitting endless amounts of files to Kaggle!
 testing <- train[-inTrain, ]
 
+rm(train)
+rm(inTrain)
+
 # Explore the data --------------------------------------------------------
+
+## Note that the test dataset does not have the following variables
+## - Category (the outcome variable)
+## - Descript
+## - Resolution
+## Therefore, these should not be used in any predictive modelling,
+## but they may be used to explore the training data set.
+
 
 str(train)
 
@@ -72,6 +87,15 @@ plot(train$Category)
 table(train$Category[, train$DayOfWeek == "Monday"] )
 temp <- filter(train, DayOfWeek == "Monday")
 
+# Are there multiple crimes are addresses?
+dim(training)[1]
+length(unique(training$Address))
+dim(training)[1] / length(unique(training$Address))
+# There are 24 times more crimes than there are unique addresses.
+# Several (maybe types of) crimes must be occuring at the same address.
+# However, if this was used as a factor variable, there would be too many levels
+# to make this an effficient, if useful, predictor variable.
+
 # Feature engineering -----------------------------------------------------
 
 ## The Address field gives clue as to whether a crime occurred on a street
@@ -81,25 +105,48 @@ corner <- function(x) {
     if (grepl("/", x) == TRUE)
         return("Corner")
     else
-        return("Building")
+        return("Block")
 }
 
 training$Corner <- sapply(training$Address, corner)
+training$Corner <- as.factor(training$Corner)
 
 ## Crimes can be categorised
 
 
 # Modelling ---------------------------------------------------------------
-
+## For reproducability...
 set.seed(13579)
-modelFit <- train(Category ~ DayOfWeek + PdDistrict + Resolution + Corner, method = "rf", data = training)
+
+## Note that the test dataset does not have the following variables
+## - Category (the outcome variable)
+## - Descript
+## - Resolution
+## Therefore, these should not be used in any predictive modelling
 
 
+## Try a simple decition tree (rpart) on "Corner" and "DayOfWeek"
+system.time(
+    modelFit <- train(Category ~ DayOfWeek + Corner + PdDistrict, method = "rpart", data = training)
+)
+## Accuracy is only 0.225 on the training data set!
+
+
+## Prediction model using random forests (rf)
+## This takes a very long time, and requires a lot of RAM, depending
+## on the number of trees to grow
+system.time(
+    modelFit <- train(Category ~ DayOfWeek + PdDistrict + Corner, method = "rf", ntree = 50, data = training)
+)
 
 # Cross-validation --------------------------------------------------------
 
 ## Run the same data preprocessing performed on the training data set on the
 ## testing data set.
 
-testing$Corner <- sapply(training$Address, corner)
-
+testing$Corner <- sapply(testing$Address, corner)
+prediction <- predict(modelFit, newdata = testing)
+cm <- confusionMatrix(prediction, testing$Category)
+cm$overall
+## Out-of-sample error is estimated to be 0.226 based on the testing dataset
+## consistent with the training dataset.
