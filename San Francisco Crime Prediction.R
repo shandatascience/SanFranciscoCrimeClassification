@@ -12,6 +12,7 @@
 
 library(dplyr)
 library(ggplot2)
+library(tidyr)
 library(caret)
 ## Used for manipulating times and dates
 library(lubridate)
@@ -36,7 +37,6 @@ test <- read.csv("test.csv", header = TRUE, sep = ",")
 ## Dates needs to be converted from a Factor variable to POSIXct format
 ## Using lubridate
 train$Dates <- ymd_hms(train$Dates)
-train$Dates <- as.POSIXct(round(train$Dates, units = "days"))
 
 ## Descriptions and Addresses are not Factors, so convert to Character
 train$Descript <- as.character(train$Descript)
@@ -86,11 +86,6 @@ plot(table(training$PdDistrict, training$Category))
 table(training$Category, training$PdDistrict)
 
 ## Are there different crimes on different days
-## What are the top crimes on Mondays?
-monday <- filter(training, DayOfWeek == "Monday")
-df <- as.data.frame(table(monday$Category))
-arrange(df, desc(Freq))
-
 ## Function to find the top 10 crime categories by day
 crimeByDay <- function(df, day) {
     day <- filter(training, DayOfWeek == day)
@@ -99,19 +94,26 @@ crimeByDay <- function(df, day) {
 }
 
 ## Do different crimes occur at different times during a day?
+category_time = function(x) {
+    df <- filter(training, Category == x)
+    dat <- aggregate(df$Category, list(Hour = df$Hour), FUN = length)
+    g <- ggplot(dat, aes(x = Hour, y = x))
+    g <- g + geom_line()
+    g    
+}
 
 
 ## What are Bad Checks?
 bc <- filter(training[, -1], Category == "BAD CHECKS")
 as.data.frame(table(bc$Descript))
 ## Cheques... Not everyone is American!
+rm(bc)
 
 ## Types of ASSAULT?
 assault <- filter(training[, -1], Category == "ASSAULT")
 as.data.frame(table(assault$Descript))
 
-
-
+rm(assault)
 
 ## Are there multiple crimes are addresses?
 dim(training)[1]
@@ -137,6 +139,11 @@ corner <- function(x) {
 training$Corner <- sapply(training$Address, corner)
 training$Corner <- as.factor(training$Corner)
 
+## Different crimes, and the amount of crime, can vary over the day.
+## Time may be a useful factor, and can be engineered from the Dates variable
+training$Hour <- hour(training$Dates)
+training$Minute <- minute(training$Dates)
+
 ## Crimes can be categorised
 
 
@@ -153,7 +160,7 @@ set.seed(13579)
 
 ## Try a simple decition tree (rpart) on "Corner" and "DayOfWeek"
 system.time(
-    modelFit <- train(Category ~ DayOfWeek + Corner + PdDistrict, method = "rpart", data = training)
+    modelFit <- train(Category ~ DayOfWeek + Corner + PdDistrict + Hour, method = "rpart", data = training)
 )
 ## Accuracy is only 0.225 on the training data set!
 
@@ -171,6 +178,11 @@ system.time(
 ## testing data set.
 
 testing$Corner <- sapply(testing$Address, corner)
+testing$Corner <- as.factor(testing$Corner)
+testing$Hour <- hour(testing$Dates)
+testing$Minute <- minute(testing$Dates)
+
+
 prediction <- predict(modelFit, newdata = testing)
 cm <- confusionMatrix(prediction, testing$Category)
 cm$overall
