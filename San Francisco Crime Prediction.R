@@ -47,7 +47,8 @@ train$Address <- as.character(train$Address)
 set.seed(2468)
 
 ## Split the train set into subsets for cross validation of prediction model
-inTrain <- createDataPartition(y = train$Category, p = 0.6, list = FALSE)
+## Set p = 0.1 to make modelling easier 
+inTrain <- createDataPartition(y = train$Category, p = 0.1, list = FALSE)
 
 ## The training set is primarily used for training a prediction model
 ## The training set is also easier for exploring, and quicker to test models
@@ -59,6 +60,8 @@ testing <- train[-inTrain, ]
 
 rm(train)
 rm(inTrain)
+## This is also temporary if the testing data set was created above.
+rm(testing)
 
 # Explore the data --------------------------------------------------------
 
@@ -99,15 +102,25 @@ category_time = function(x) {
     dat <- aggregate(df$Category, list(Hour = df$Hour), FUN = length)
     g <- ggplot(dat, aes(x = Hour, y = x))
     g <- g + geom_line()
+    g <- g + labs(title = x,
+                  x = "Hour",
+                  y = "Number of Crime")
     g    
 }
 
+## Is there a pattern of crime across different months/seasons?
+## Function to plot crime against month
+category_month = function(x) {
+  df <- filter(training, Category == x)
+  dat <- aggregate(df$Category, list(Month = df$Month), FUN = length)
+  g <- ggplot(dat, aes(x = Month, y = x))
+  g <- g + geom_line()
+  g <- g + labs(title = x,
+                x = "Month",
+                y = "Number of Crime")
+  g  
+}
 
-## What are Bad Checks?
-bc <- filter(training[, -1], Category == "BAD CHECKS")
-as.data.frame(table(bc$Descript))
-## Cheques... Not everyone is American!
-rm(bc)
 
 ## Types of ASSAULT?
 assault <- filter(training[, -1], Category == "ASSAULT")
@@ -143,6 +156,8 @@ training$Corner <- as.factor(training$Corner)
 ## Time may be a useful factor, and can be engineered from the Dates variable
 training$Hour <- hour(training$Dates)
 training$Minute <- minute(training$Dates)
+training$Year <- year(training$Dates)
+training$Month <- month(training$Dates)
 
 ## Crimes can be categorised
 
@@ -160,16 +175,23 @@ set.seed(13579)
 
 ## Try a simple decition tree (rpart) on "Corner" and "DayOfWeek"
 system.time(
-    modelFit <- train(Category ~ DayOfWeek + Corner + PdDistrict + Hour, method = "rpart", data = training)
+    modelFit <- train(Category ~ DayOfWeek + Corner, method = "rpart", data = training)
 )
 ## Accuracy is only 0.225 on the training data set!
 
+system.time(
+  modelFit <- train(Category ~ DayOfWeek + Corner + PdDistrict + Hour + Month + Year, method = "rpart", data = training)
+)
 
 ## Prediction model using random forests (rf)
 ## This takes a very long time, and requires a lot of RAM, depending
 ## on the number of trees to grow
 system.time(
-    modelFit <- train(Category ~ DayOfWeek + PdDistrict + Corner, method = "rf", ntree = 50, data = training)
+    modelFit <- train(Category ~ DayOfWeek + PdDistrict + Corner + Hour + Month + Year, method = "rf", ntree = 5, data = training)
+)
+
+system.time(
+    modelFit <- train(Category ~ DayOfWeek + PdDistrict + Corner + Hour + Month + Year, method = "parRF", ntree = 5, data = training)
 )
 
 # Cross-validation --------------------------------------------------------
