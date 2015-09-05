@@ -58,8 +58,7 @@ training <- train[inTrain, ]
 ## will be quicker to do than submitting endless amounts of files to Kaggle!
 testing <- train[-inTrain, ]
 
-rm(train)
-rm(inTrain)
+rm(train, inTrain)
 ## This is also temporary if the testing data set was created above.
 rm(testing)
 
@@ -154,13 +153,39 @@ training$Corner <- as.factor(training$Corner)
 
 ## Different crimes, and the amount of crime, can vary over the day.
 ## Time may be a useful factor, and can be engineered from the Dates variable
-training$Hour <- hour(training$Dates)
-training$Minute <- minute(training$Dates)
-training$Year <- year(training$Dates)
-training$Month <- month(training$Dates)
+training$Hour <- as.factor(hour(training$Dates))
+training$Minute <- as.factor(minute(training$Dates))
+training$Year <- as.factor(year(training$Dates))
+training$Month <- as.factor(month(training$Dates))
 
-## Crimes can be categorised
 
+## Other variables contain many levels, so I may do well by creating dummy
+## variables out of them using the dummyVars function in the caret package
+DayOfWeekDummy <- dummyVars(~ DayOfWeek, data = training)
+DayOfWeekDummy <- predict(DayOfWeekDummy, training)
+
+HourDummy <- dummyVars(~ Hour, data = training)
+HourDummy <- predict(HourDummy, training)
+
+MonthDummy <- dummyVars(~ Month, data = training)
+MonthDummy <- predict(MonthDummy, training)
+
+YearDummy <- dummyVars(~ Year, data = training)
+YearDummy <- predict(YearDummy, training)
+
+DistrictDummy <- dummyVars(~ PdDistrict, data = training)
+DistrictDummy <- predict(DistrictDummy, training)
+
+## Combine all the dummy variables into the training set, and remove duplication
+training <- cbind(training, DayOfWeekDummy, HourDummy, MonthDummy, YearDummy, DistrictDummy)
+rm(DayOfWeekDummy, HourDummy, MonthDummy, YearDummy, DistrictDummy)
+
+## Remove unnecessary columns (Dates, Descript, DayOfWeek, Resolution, Address)
+## from the training set.
+training <- training %>% select(-Dates, -Descript, -DayOfWeek, -Resolution, -Address, -Hour, -Minute, -Year, -Month, -PdDistrict)
+
+## For now, I haven't thought of what to do with X and Y, so drop these too
+training <- training %>% select(-X, -Y)
 
 # Modelling ---------------------------------------------------------------
 ## For reproducability...
@@ -173,9 +198,9 @@ set.seed(13579)
 ## Therefore, these should not be used in any predictive modelling
 
 
-## Try a simple decition tree (rpart) on "Corner" and "DayOfWeek"
+## Try a simple decision tree (rpart) on everything
 system.time(
-    modelFit <- train(Category ~ DayOfWeek + Corner, method = "rpart", data = training)
+    modelFit <- train(Category ~ ., method = "rpart", data = training)
 )
 ## Accuracy is only 0.225 on the training data set!
 
@@ -192,7 +217,7 @@ system.time(
 )
 
 system.time(
-    modelFit <- train(Category ~ DayOfWeek + PdDistrict + Corner + Hour + Month + Year, method = "parRF", ntree = 5, data = training)
+    modelFit <- train(Category ~ ., method = "parRF", ntree = 5, data = training)
 )
 ## Accuracy is only marginally better: 0.2229739
 
